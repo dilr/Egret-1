@@ -67,7 +67,7 @@ def _validate_and_extract_slack_penalties(model_data):
     return model_data.data['system']['load_mismatch_cost'], model_data.data['system']['q_load_mismatch_cost']
 
 
-def _create_base_power_ac_model(model_data, include_feasibility_slack=False):
+def _create_base_power_ac_model(model_data, include_feasibility_slack=False, tighter_ac_bounds=False):
     md = model_data.clone_in_service()
     tx_utils.scale_ModelData_to_pu(md, inplace=True)
 
@@ -185,10 +185,54 @@ def _create_base_power_ac_model(model_data, include_feasibility_slack=False):
             s_lbub[k] = (None, None)
         else:
             s_lbub[k] = (-s_max[k],s_max[k])
-    pf_bounds = s_lbub
-    pt_bounds = s_lbub
-    qf_bounds = s_lbub
-    qt_bounds = s_lbub
+    if tighter_ac_bounds:
+        pf_bounds = s_lbub
+        pt_bounds = s_lbub
+        qf_bounds = s_lbub
+        def qt_bounds(m, b):
+            branch = branches[b]
+            bus = (branch['from_bus'], branch['to_bus'])
+            c_lb, c_ub = m.c[bus].bounds
+            s_lb, s_ub = m.s[bus].bounds
+            bt = buses[branch['to_bus']]
+
+            resist = branch['resistance']
+            react = branch['reactance']
+            g = resist / (resist**2 + react**2)  # conductance
+            b = - react / (resist**2 + react**2) # susceptance
+            bc = branch['charging_susceptance']
+            tau = branch.get('transformer_tap_ratio', 1)
+            th_s = branch.get('transformer_phase_shift', 0) * pi / 180
+            cc = tau * pe.cos(th_s)
+            dd = tau * pe.sin(th_s)
+            tau2 = tau ** 2
+
+            expr1_min = min(-(b + bc / 2) * bt['v_min'] ** 2, -(b + bc / 2) * bt['v_max'] ** 2)
+            expr1_max = max(-(b + bc / 2) * bt['v_min'] ** 2, -(b + bc / 2) * bt['v_max'] ** 2)
+
+            expr2_min = min(-(-b * cc + g * dd) / tau2 * c_lb, -(-b * cc + g * dd) / tau2 * c_ub)
+            expr2_max = max(-(-b * cc + g * dd) / tau2 * c_lb, -(-b * cc + g * dd) / tau2 * c_ub)
+
+            expr3_min = min(-(-g * cc - b * dd) / tau2 * s_lb, -(-g * cc - b * dd) / tau2 * s_ub)
+            expr3_max = max(-(-g * cc - b * dd) / tau2 * s_lb, -(-g * cc - b * dd) / tau2 * s_ub)
+
+            qt_min = expr1_min + expr2_min + expr3_min
+            qt_max = expr1_max + expr2_max + expr3_max
+
+            Smax = branch['rating_long_term']
+            if Smax is None:
+                return qt_min, qt_max
+
+            if -Smax > qt_min:
+                qt_min = -Smax
+            if Smax < qt_max:
+                qt_max = Smax
+            return qt_min, qt_max
+    else:
+        pf_bounds = s_lbub
+        pt_bounds = s_lbub
+        qf_bounds = s_lbub
+        qt_bounds = s_lbub
     pf_init = dict()
     pt_init = dict()
     qf_init = dict()
@@ -290,8 +334,8 @@ def _create_base_power_ac_model(model_data, include_feasibility_slack=False):
     return model, md
 
 
-def create_atan_acopf_model(model_data, include_feasibility_slack=False):
-    model, md = _create_base_power_ac_model(model_data, include_feasibility_slack=include_feasibility_slack)
+def create_atan_acopf_model(model_data, include_feasibility_slack=False, tighter_ac_bounds=False):
+    model, md = _create_base_power_ac_model(model_data, include_feasibility_slack=include_feasibility_slack, tighter_ac_bounds=tighter_ac_bounds)
 
     branch_attrs = md.attributes(element_type='branch')
     bus_pairs = zip_items(branch_attrs['from_bus'], branch_attrs['to_bus'])
@@ -338,8 +382,8 @@ def create_atan_acopf_model(model_data, include_feasibility_slack=False):
     return model, md
 
 
-def create_psv_acopf_model(model_data, include_feasibility_slack=False):
-    model, md = _create_base_power_ac_model(model_data, include_feasibility_slack=include_feasibility_slack)
+def create_psv_acopf_model(model_data, include_feasibility_slack=False, tighter_ac_bounds=False):
+    model, md = _create_base_power_ac_model(model_data, include_feasibility_slack=include_feasibility_slack, tighter_ac_bounds=tighter_ac_bounds)
     bus_attrs = md.attributes(element_type='bus')
     branch_attrs = md.attributes(element_type='branch')
     bus_pairs = zip_items(branch_attrs['from_bus'], branch_attrs['to_bus'])
@@ -382,8 +426,8 @@ def create_psv_acopf_model(model_data, include_feasibility_slack=False):
     return model, md
 
 
-def create_rsv_acopf_model(model_data, include_feasibility_slack=False):
-    model, md = _create_base_power_ac_model(model_data, include_feasibility_slack=include_feasibility_slack)
+def create_rsv_acopf_model(model_data, include_feasibility_slack=False, tighter_ac_bounds=False):
+    model, md = _create_base_power_ac_model(model_data, include_feasibility_slack=include_feasibility_slack, tighter_ac_bounds=tighter_ac_bounds)
     bus_attrs = md.attributes(element_type='bus')
     branch_attrs = md.attributes(element_type='branch')
     bus_pairs = zip_items(branch_attrs['from_bus'], branch_attrs['to_bus'])

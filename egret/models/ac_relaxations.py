@@ -238,8 +238,9 @@ def create_atan_relaxation(model_data,
                            use_linear_relaxation=True,
                            include_feasibility_slack=False,
                            use_soc_edge_cuts=False,
-                           use_fbbt=True):
-    model, md = create_atan_acopf_model(model_data=model_data, include_feasibility_slack=include_feasibility_slack)
+                           use_fbbt=True,
+                           tighter_ac_bounds=False):
+    model, md = create_atan_acopf_model(model_data=model_data, include_feasibility_slack=include_feasibility_slack, tighter_ac_bounds=tighter_ac_bounds)
     del model.ineq_soc
     del model._con_ineq_soc
     if use_soc_edge_cuts:
