@@ -104,17 +104,19 @@ class SOCEdgeCutsData(BaseRelaxationData):
     def vars_with_bounds_in_relaxation(self):
         return self.get_rhs_vars()
 
-    def set_input(self, c, s, vmsq_1, vmsq_2, persistent_solvers=None):
-        self._set_input(relaxation_side=coramin.utils.RelaxationSide.UNDER,
-                        persistent_solvers=persistent_solvers,
-                        use_linear_relaxation=True)
+    def set_input(self, c, s, vmsq_1, vmsq_2,
+                large_coef=1e5, small_coef=1e-10, safety_tol=1e-10):
+        super().set_input(relaxation_side=coramin.utils.RelaxationSide.UNDER,
+                          use_linear_relaxation=True,
+                          large_coef=large_coef, small_coef=small_coef,
+                          safety_tol=safety_tol)
         self._cref.set_component(c)
         self._sref.set_component(s)
         self._vmsq_1_ref.set_component(vmsq_1)
         self._vmsq_2_ref.set_component(vmsq_2)
 
-    def build(self, c, s, vmsq_1, vmsq_2, persistent_solvers=None):
-        self.set_input(c=c, s=s, vmsq_1=vmsq_1, vmsq_2=vmsq_2, persistent_solvers=persistent_solvers)
+    def build(self, c, s, vmsq_1, vmsq_2):
+        self.set_input(c=c, s=s, vmsq_1=vmsq_1, vmsq_2=vmsq_2)
         self.rebuild()
 
     def _build_relaxation(self):
