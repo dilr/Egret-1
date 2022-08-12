@@ -13,6 +13,7 @@ acopf tester
 import os
 import math
 import unittest
+from pyomo.common.collections import ComponentSet
 from pyomo.opt import SolverFactory, TerminationCondition
 import pyomo.environ as pe
 from egret.models.acopf import create_psv_acopf_model
@@ -24,7 +25,8 @@ from egret.parsers.matpower_parser import create_ModelData
 import numpy as np
 try:
     import coramin
-    from egret.models.ac_relaxations import SOCEdgeCuts
+    from coramin.relaxations.copy_relaxation import copy_relaxation_with_local_data
+    from egret.models.ac_relaxations import SOCEdgeCuts, SOCEdgeCutsData
     coramin_available = True
 except ImportError:
     coramin_available = False
@@ -177,6 +179,31 @@ class TestRelaxations(unittest.TestCase):
 
 @unittest.skipIf(not coramin_available, "coramin is not available")
 class TestSOCEdgeCuts(unittest.TestCase):
+    def test_copy_edge_cuts(self):
+        #TODO: convert common part into setup
+        m = pe.ConcreteModel()
+        m.c = pe.Var()
+        m.s = pe.Var()
+        m.w1 = pe.Var()
+        m.w2 = pe.Var()
+        m.rel = SOCEdgeCuts()
+        m.rel.set_input(c=m.c, s=m.s, vmsq_1=m.w1, vmsq_2=m.w2)
+
+        m2 = pe.ConcreteModel()
+        m2.c = pe.Var()
+        m2.s = pe.Var()
+        m2.w1 = pe.Var()
+        m2.w2 = pe.Var()
+        new_rel = copy_relaxation_with_local_data(m.rel, {id(m.c): m2.c,id(m.s): m2.s, id(m.w1): m2.w1, id(m.w2): m2.w2,})
+        self.assertIn(m2.c, ComponentSet(new_rel.get_rhs_vars()))
+        self.assertIn(m2.s, ComponentSet(new_rel.get_rhs_vars()))
+        self.assertIn(m2.w1, ComponentSet(new_rel.get_rhs_vars()))
+        self.assertIn(m2.w2, ComponentSet(new_rel.get_rhs_vars()))
+        self.assertEqual(len(new_rel.get_rhs_vars()), 4)
+        self.assertEqual(m.rel.use_linear_relaxation, new_rel.use_linear_relaxation)
+        self.assertEqual(m.rel.relaxation_side, new_rel.relaxation_side)
+        self.assertIsInstance(new_rel, SOCEdgeCutsData)
+
     def test_soc_edge_cuts(self):
         m = pe.ConcreteModel()
         m.c = pe.Var()

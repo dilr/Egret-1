@@ -215,6 +215,22 @@ class SOCEdgeCutsData(BaseRelaxationData):
             raise ValueError('The SOCEdgeCuts class can only produce linear relaxations')
         self._use_linear_relaxation = True
 
+    def _copy_relaxation_with_local_data(self, old_var_to_new_var_map):
+        rhs_vars = self.get_rhs_vars()
+        old_c = rhs_vars[0]
+        old_s = rhs_vars[1]
+        old_vmsq_1 = rhs_vars[2]
+        old_vmsq_2 = rhs_vars[3]
+        new_c = old_var_to_new_var_map[id(old_c)]
+        new_s = old_var_to_new_var_map[id(old_s)]
+        new_vmsq_1 = old_var_to_new_var_map[id(old_vmsq_1)]
+        new_vmsq_2 = old_var_to_new_var_map[id(old_vmsq_2)]
+        new_rel = SOCEdgeCuts(concrete=True)
+        #TODO: do we need to copy persistant solvers?
+        new_rel.set_input(c=new_c, s=new_s,
+                          vmsq_1=new_vmsq_1, vmsq_2=new_vmsq_2)
+        return new_rel
+
 
 def create_soc_relaxation(model_data,
                           use_linear_relaxation=True,
